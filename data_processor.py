@@ -87,7 +87,7 @@ def get_feature_sets(df, genres_encoded, lang_encoded):
     """Get feature sets for classification and regression"""
     # Classification features
     numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
-    final_features_cls = numerical_features_cls + list(genres_encoded.columns) + list(lang_encoded.columns)
+    final_features_cls = numerical_features_cls
     
     # Regression features
     features_reg = ['vote_count', 'budget', 'popularity', 'runtime', 'vote_average']
