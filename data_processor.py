@@ -1,0 +1,190 @@
+import pandas as pd
+import numpy as np
+import ast
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer, OneHotEncoder
+
+def load_and_preprocess_data(file_path):
+    """Load and preprocess movie metadata"""
+    df = pd.read_csv(file_path, low_memory=False)
+    
+    # Convert numeric columns
+    df['budget'] = pd.to_numeric(df['budget'], errors='coerce')
+    df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce')
+    df = df[df['budget'] > 0].copy()
+    
+    # Handle missing values
+    df['runtime'] = df['runtime'].fillna(df['runtime'].median())
+    df['release_date'] = pd.to_datetime(df['release_date'], errors='coerce')
+    df = df.dropna(subset=['release_date'])
+    
+    # Handle original_language
+    most_common_lang = df['original_language'].mode()[0]
+    df['original_language'] = df['original_language'].fillna(most_common_lang)
+    
+    return df
+
+def process_genres(df):
+    """Process and encode genres"""
+    def parse_genres(genres_str):
+        try:
+            genres_list = ast.literal_eval(genres_str)
+            return [genre['name'] for genre in genres_list]
+        except:
+            return []
+    
+    df['genres_list'] = df['genres'].apply(parse_genres)
+    mlb = MultiLabelBinarizer()
+    genres_encoded = pd.DataFrame(mlb.fit_transform(df['genres_list']),
+                                columns=mlb.classes_, index=df.index)
+    return df, genres_encoded, mlb
+
+def process_languages(df):
+    """Process and encode languages"""
+    lang_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
+    lang_encoded = pd.DataFrame(lang_encoder.fit_transform(df[['original_language']]),
+                              columns=lang_encoder.get_feature_names_out(['original_language']),
+                              index=df.index)
+    return lang_encoded, lang_encoder
+
+def create_success_label(df):
+    """Create success label based on revenue/budget ratio"""
+    return (df['revenue'] / df['budget'] >= 2).astype(int)
+
+def generate_data_visualizations(df, output_dir='./visualizations'):
+    """Generate and save data visualizations"""
+    # Create output directory if it doesn't exist
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Correlation heatmap
+    numeric_columns = ['budget', 'revenue', 'popularity', 'runtime', 'vote_average', 'vote_count']
+    correlation = df[numeric_columns].corr()
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt=".2f")
+    plt.title("Correlation Heatmap")
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/correlation_heatmap.png')
+    plt.close()
+    
+    # Success distribution
+    plt.figure(figsize=(8, 6))
+    df['success'] = create_success_label(df)
+    sns.countplot(data=df, x='success')
+    plt.title("Distribution of Movie Success")
+    plt.savefig(f'{output_dir}/success_distribution.png')
+    plt.close()
+    
+    # Language distribution
+    plt.figure(figsize=(12, 6))
+    df['original_language'].value_counts().head(10).plot(kind='bar')
+    plt.title("Top 10 Original Languages")
+    plt.savefig(f'{output_dir}/language_distribution.png')
+    plt.close()
+
+def get_feature_sets(df, genres_encoded, lang_encoded):
+    """Get feature sets for classification and regression"""
+    # Classification features
+    numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
+    final_features_cls = numerical_features_cls + list(genres_encoded.columns) + list(lang_encoded.columns)
+    
+    # Regression features
+    features_reg = ['vote_count', 'budget', 'popularity', 'runtime', 'vote_average']
+    
+    return final_features_cls, features_reg
+
+def generate_model_performance_plots(results, output_dir='./visualizations'):
+    """Generate plots for model performance comparison"""
+    # Create output directory if it doesn't exist
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Classification models performance
+    if 'mean_accuracy' in results[list(results.keys())[0]]:
+        models = list(results.keys())
+        accuracies = [results[m]['mean_accuracy'] for m in models]
+        roc_aucs = [results[m]['mean_roc_auc'] for m in models]
+        
+        plt.figure(figsize=(12, 6))
+        x = np.arange(len(models))
+        width = 0.35
+        
+        plt.bar(x - width/2, accuracies, width, label='Accuracy')
+        plt.bar(x + width/2, roc_aucs, width, label='ROC-AUC')
+        
+        plt.xlabel('Models')
+        plt.ylabel('Score')
+        plt.title('Classification Models Performance Comparison')
+        plt.xticks(x, models, rotation=45)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/classification_performance.png')
+        plt.close()
+    
+    # Regression models performance
+    if 'mean_mae' in results[list(results.keys())[0]]:
+        models = list(results.keys())
+        maes = [results[m]['mean_mae'] for m in models]
+        rmses = [results[m]['mean_rmse'] for m in models]
+        r2s = [results[m]['mean_r2'] for m in models]
+        
+        plt.figure(figsize=(15, 5))
+        x = np.arange(len(models))
+        width = 0.25
+        
+        plt.bar(x - width, maes, width, label='MAE')
+        plt.bar(x, rmses, width, label='RMSE')
+        plt.bar(x + width, r2s, width, label='R²')
+        
+        plt.xlabel('Models')
+        plt.ylabel('Score')
+        plt.title('Regression Models Performance Comparison')
+        plt.xticks(x, models, rotation=45)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/regression_performance.png')
+        plt.close()
+
+def analyze_feature_importance(model, feature_names, output_dir='./visualizations'):
+    """Analyze and plot feature importance"""
+    if hasattr(model, 'feature_importances_'):
+        importances = model.feature_importances_
+        indices = np.argsort(importances)[::-1]
+        
+        plt.figure(figsize=(12, 6))
+        plt.title('Feature Importance')
+        plt.bar(range(len(importances)), importances[indices])
+        plt.xticks(range(len(importances)), [feature_names[i] for i in indices], rotation=90)
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/feature_importance.png')
+        plt.close()
+        
+        # Return top 10 important features
+        return [(feature_names[i], importances[i]) for i in indices[:10]]
+    return None
+
+def generate_prediction_analysis(y_true, y_pred, output_dir='./visualizations'):
+    """Generate plots for prediction analysis"""
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_true, y_pred, alpha=0.5)
+    plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--', lw=2)
+    plt.xlabel('True Values')
+    plt.ylabel('Predictions')
+    plt.title('Prediction vs True Values')
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/prediction_analysis.png')
+    plt.close()
+
+def generate_residual_plot(y_true, y_pred, output_dir='./visualizations'):
+    """Generate residual plot"""
+    residuals = y_true - y_pred
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_pred, residuals, alpha=0.5)
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.xlabel('Predicted Values')
+    plt.ylabel('Residuals')
+    plt.title('Residual Plot')
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/residual_plot.png')
+    plt.close() 
