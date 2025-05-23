@@ -26,7 +26,7 @@ def load_and_preprocess_data(file_path):
     return df
 
 def process_genres(df):
-    """Process and encode genres"""
+    """Process and encode movie genres using multi-label binarization"""
     def parse_genres(genres_str):
         try:
             genres_list = ast.literal_eval(genres_str)
@@ -41,7 +41,7 @@ def process_genres(df):
     return df, genres_encoded, mlb
 
 def process_languages(df):
-    """Process and encode languages"""
+    """Encode movie languages using one-hot encoding"""
     lang_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
     lang_encoded = pd.DataFrame(lang_encoder.fit_transform(df[['original_language']]),
                               columns=lang_encoder.get_feature_names_out(['original_language']),
@@ -49,16 +49,15 @@ def process_languages(df):
     return lang_encoded, lang_encoder
 
 def create_success_label(df):
-    """Create success label based on revenue/budget ratio"""
+    """Create binary success label based on revenue/budget ratio threshold"""
     return (df['revenue'] / df['budget'] >= 2).astype(int)
 
 def generate_data_visualizations(df, output_dir='./visualizations'):
-    """Generate and save data visualizations"""
-    # Create output directory if it doesn't exist
+    """Generate exploratory data analysis visualizations"""
     import os
     os.makedirs(output_dir, exist_ok=True)
     
-    # Correlation heatmap
+    # Correlation analysis of numerical features
     numeric_columns = ['budget', 'revenue', 'popularity', 'runtime', 'vote_average', 'vote_count']
     correlation = df[numeric_columns].corr()
     plt.figure(figsize=(10, 6))
@@ -68,7 +67,7 @@ def generate_data_visualizations(df, output_dir='./visualizations'):
     plt.savefig(f'{output_dir}/correlation_heatmap.png')
     plt.close()
     
-    # Success distribution
+    # Distribution of movie success
     plt.figure(figsize=(8, 6))
     df['success'] = create_success_label(df)
     sns.countplot(data=df, x='success')
@@ -76,7 +75,7 @@ def generate_data_visualizations(df, output_dir='./visualizations'):
     plt.savefig(f'{output_dir}/success_distribution.png')
     plt.close()
     
-    # Language distribution
+    # Top 10 language distribution
     plt.figure(figsize=(12, 6))
     df['original_language'].value_counts().head(10).plot(kind='bar')
     plt.title("Top 10 Original Languages")
@@ -84,10 +83,10 @@ def generate_data_visualizations(df, output_dir='./visualizations'):
     plt.close()
 
 def get_feature_sets(df, genres_encoded, lang_encoded):
-    """Get feature sets for classification and regression"""
+    """Define feature sets for classification and regression tasks"""
     # Classification features
     numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
-    final_features_cls = numerical_features_cls + list(genres_encoded.columns) + list(lang_encoded.columns)
+    final_features_cls = numerical_features_cls
     
     # Regression features
     features_reg = ['vote_count', 'budget', 'popularity', 'runtime', 'vote_average']
@@ -95,12 +94,11 @@ def get_feature_sets(df, genres_encoded, lang_encoded):
     return final_features_cls, features_reg
 
 def generate_model_performance_plots(results, output_dir='./visualizations'):
-    """Generate plots for model performance comparison"""
-    # Create output directory if it doesn't exist
+    """Generate comparative visualizations of model performance metrics"""
     import os
     os.makedirs(output_dir, exist_ok=True)
     
-    # Classification models performance
+    # Classification models performance comparison
     if 'mean_accuracy' in results[list(results.keys())[0]]:
         models = list(results.keys())
         accuracies = [results[m]['mean_accuracy'] for m in models]
@@ -122,7 +120,7 @@ def generate_model_performance_plots(results, output_dir='./visualizations'):
         plt.savefig(f'{output_dir}/classification_performance.png')
         plt.close()
     
-    # Regression models performance
+    # Regression models performance comparison
     if 'mean_mae' in results[list(results.keys())[0]]:
         models = list(results.keys())
         maes = [results[m]['mean_mae'] for m in models]
@@ -147,7 +145,7 @@ def generate_model_performance_plots(results, output_dir='./visualizations'):
         plt.close()
 
 def analyze_feature_importance(model, feature_names, output_dir='./visualizations'):
-    """Analyze and plot feature importance"""
+    """Analyze and visualize feature importance for tree-based models"""
     if hasattr(model, 'feature_importances_'):
         importances = model.feature_importances_
         indices = np.argsort(importances)[::-1]
@@ -160,12 +158,11 @@ def analyze_feature_importance(model, feature_names, output_dir='./visualization
         plt.savefig(f'{output_dir}/feature_importance.png')
         plt.close()
         
-        # Return top 10 important features
         return [(feature_names[i], importances[i]) for i in indices[:10]]
     return None
 
 def generate_prediction_analysis(y_true, y_pred, output_dir='./visualizations'):
-    """Generate plots for prediction analysis"""
+    """Generate scatter plot of predicted vs actual values"""
     plt.figure(figsize=(10, 6))
     plt.scatter(y_true, y_pred, alpha=0.5)
     plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--', lw=2)
@@ -177,7 +174,7 @@ def generate_prediction_analysis(y_true, y_pred, output_dir='./visualizations'):
     plt.close()
 
 def generate_residual_plot(y_true, y_pred, output_dir='./visualizations'):
-    """Generate residual plot"""
+    """Generate residual plot for regression analysis"""
     residuals = y_true - y_pred
     plt.figure(figsize=(10, 6))
     plt.scatter(y_pred, residuals, alpha=0.5)
