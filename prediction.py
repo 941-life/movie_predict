@@ -1,11 +1,8 @@
 import pandas as pd
 import numpy as np
-import ast # For parsing stringified lists/dicts
+import ast
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, confusion_matrix
@@ -35,16 +32,15 @@ def parse_genres(genres_str):
         return [] # 오류 발생 시 빈 리스트 반환
 df['genres_list'] = df['genres'].apply(parse_genres)
 
-# original_language: 이미 문자열이므로 바로 사용 가능
 
-# --- 분류 모델 준비 ---
+# Classification Model
 print("\n--- Classification Model ---")
 classification_df = df.copy()
 
-# 타겟 변수 생성
+# labeling
 classification_df['success'] = (classification_df['revenue'] / classification_df['budget'] >= 2).astype(int)
 
-# 사용할 피처 선택
+# feature selection
 numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
 categorical_features_cls_genres = 'genres_list' # MultiLabelBinarizer는 단일 컬럼을 받음
 categorical_features_cls_lang = ['original_language'] # OneHotEncoder는 리스트 형태로 받음
@@ -71,24 +67,23 @@ final_features_cls = numerical_features_cls + list(mlb.classes_) + list(lang_enc
 X_cls = classification_df[final_features_cls]
 y_cls = classification_df['success']
 
-# 데이터 분할
+# train/test split
 X_train_cls, X_test_cls, y_train_cls, y_test_cls = train_test_split(X_cls, y_cls, test_size=0.2, random_state=42, stratify=y_cls if y_cls.nunique() > 1 else None) # stratify 추가
 
-# 숫자형 피처 스케일링
+# numerical feature scaling
 scaler_cls = StandardScaler()
 X_train_cls[numerical_features_cls] = scaler_cls.fit_transform(X_train_cls[numerical_features_cls])
 X_test_cls[numerical_features_cls] = scaler_cls.transform(X_test_cls[numerical_features_cls])
 
 
-# 모델 학습 (Random Forest 예시)
+# train
 cls_model = RandomForestClassifier(random_state=42)
-# 만약 샘플 수가 너무 적으면 오류가 발생할 수 있습니다.
 if len(X_train_cls) > 0 and len(X_test_cls) > 0:
     cls_model.fit(X_train_cls, y_train_cls)
     y_pred_cls = cls_model.predict(X_test_cls)
     y_pred_proba_cls = cls_model.predict_proba(X_test_cls)[:, 1]
 
-    # 모델 평가
+    # evaluation
     print("Accuracy:", accuracy_score(y_test_cls, y_pred_cls))
     print("Classification Report:\n", classification_report(y_test_cls, y_pred_cls, zero_division=0))
     if len(np.unique(y_test_cls)) > 1 : # ROC AUC는 두 개 이상의 클래스가 필요
@@ -96,20 +91,20 @@ if len(X_train_cls) > 0 and len(X_test_cls) > 0:
 else:
     print("Not enough data for classification model training/testing after preprocessing.")
 
+# classification model test
 def test_classification_model(model, X_test, y_test):
     print("\n--- Classification Test Results ---")
-    
-    # 예측값
+
+    # prediction
     y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)[:, 1]  # 확률값
-    
-    # 평가 지표
+    y_proba = model.predict_proba(X_test)[:, 1] # probabilities for success class
+
+    # evaluation
     acc = accuracy_score(y_test, y_pred)
     roc_auc = roc_auc_score(y_test, y_proba)
     report = classification_report(y_test, y_pred, zero_division=0)
     cm = confusion_matrix(y_test, y_pred)
 
-    # 출력
     print(f"Accuracy: {acc:.4f}")
     print(f"ROC AUC Score: {roc_auc:.4f}")
     print("Classification Report:\n", report)
@@ -118,32 +113,32 @@ def test_classification_model(model, X_test, y_test):
     return y_pred, y_proba
 
 
-# --- 회귀 모델 준비 ---
+# Regression Model
 print("\n--- Regression Model ---")
 regression_df = df.copy()
 
-# 사용할 피처 및 타겟 선택
-features_reg = ['vote_count', 'budget']
+# feature selection
+features_reg = ['vote_count', 'budget', 'popularity', 'runtime', 'vote_average']
 target_reg = 'revenue'
 
 X_reg = regression_df[features_reg]
 y_reg = regression_df[target_reg]
 
-# 데이터 분할
+# train/test split
 X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(X_reg, y_reg, test_size=0.2, random_state=42)
 
-# 피처 스케일링 (선택사항이지만, 선형 모델에는 유용)
+# feature scaling
 scaler_reg = StandardScaler()
 X_train_reg = scaler_reg.fit_transform(X_train_reg)
 X_test_reg = scaler_reg.transform(X_test_reg)
 
-# 모델 학습 (Random Forest Regressor 예시)
+# train
 reg_model = RandomForestRegressor(random_state=42)
 if len(X_train_reg) > 0 and len(X_test_reg) > 0:
     reg_model.fit(X_train_reg, y_train_reg)
     y_pred_reg = reg_model.predict(X_test_reg)
 
-    # 모델 평가
+    # evaluation
     print("MAE:", mean_absolute_error(y_test_reg, y_pred_reg))
     print("MSE:", mean_squared_error(y_test_reg, y_pred_reg))
     print("RMSE:", np.sqrt(mean_squared_error(y_test_reg, y_pred_reg)))
@@ -151,19 +146,19 @@ if len(X_train_reg) > 0 and len(X_test_reg) > 0:
 else:
     print("Not enough data for regression model training/testing after preprocessing.")
 
+# regression model test
 def test_regression_model(model, X_test, y_test):
     print("\n--- Regression Test Results ---")
 
-    # 예측값
+    # prediction
     y_pred = model.predict(X_test)
 
-    # 평가 지표
+    # evaluation
     mae = mean_absolute_error(y_test, y_pred)
     mse = mean_squared_error(y_test, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)
 
-    # 출력
     print(f"MAE: {mae:,.2f}")
     print(f"MSE: {mse:,.2f}")
     print(f"RMSE: {rmse:,.2f}")
