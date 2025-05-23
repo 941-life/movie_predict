@@ -9,61 +9,57 @@ from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 
 df = pd.read_csv('./movies_metadata.csv', low_memory=False)
 
-df['runtime'] = df['runtime'].fillna(df['runtime'].median())
 
 df['budget'] = pd.to_numeric(df['budget'], errors='coerce')
 df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce')
 df = df[df['budget'] > 0].copy()
 
-# original_language 결측치 처리 - 최빈값으로 대체
-most_common_lang = df['original_language'].mode()[0]
-df['original_language'] = df['original_language'].fillna(most_common_lang)
-
-# release_date 파싱 및 결측치 제거
+# removing missing value
+df['runtime'] = df['runtime'].fillna(df['runtime'].median())
 df['release_date'] = pd.to_datetime(df['release_date'], errors='coerce')
 df = df.dropna(subset=['release_date'])
 
-# genres 처리
+# original_language - 최빈값 대체
+most_common_lang = df['original_language'].mode()[0]
+df['original_language'] = df['original_language'].fillna(most_common_lang)
+
+# genres parsing
 def parse_genres(genres_str):
     try:
         genres_list = ast.literal_eval(genres_str)
         return [genre['name'] for genre in genres_list]
     except:
-        return [] # 오류 발생 시 빈 리스트 반환
+        return []
 df['genres_list'] = df['genres'].apply(parse_genres)
 
+
+# MultiLabelBinarizer: genres_list
+mlb = MultiLabelBinarizer()
+genres_encoded = pd.DataFrame(mlb.fit_transform(df['genres_list']),
+                              columns=mlb.classes_, index=df.index)
+df = pd.concat([df, genres_encoded], axis=1)
+
+# OneHotEncoder: original_language
+lang_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
+lang_encoded = pd.DataFrame(lang_encoder.fit_transform(df[['original_language']]),
+                            columns=lang_encoder.get_feature_names_out(['original_language']),
+                            index=df.index)
+df = pd.concat([df, lang_encoded], axis=1)
 
 # Classification Model
 print("\n--- Classification Model ---")
 classification_df = df.copy()
 
-# labeling
+# labeling (1: success / 0: failed)
 classification_df['success'] = (classification_df['revenue'] / classification_df['budget'] >= 2).astype(int)
 
 # feature selection
 numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
-categorical_features_cls_genres = 'genres_list' # MultiLabelBinarizer는 단일 컬럼을 받음
-categorical_features_cls_lang = ['original_language'] # OneHotEncoder는 리스트 형태로 받음
+categorical_features_cls_genres = 'genres_list'
+categorical_features_cls_lang = ['original_language']
 
-# 전처리기 정의
-# 장르: MultiLabelBinarizer (DataFrame에 직접 적용)
-mlb = MultiLabelBinarizer()
-genres_encoded = pd.DataFrame(mlb.fit_transform(classification_df[categorical_features_cls_genres]),
-                              columns=mlb.classes_, index=classification_df.index)
-classification_df = pd.concat([classification_df, genres_encoded], axis=1)
-
-# 언어: OneHotEncoder (ColumnTransformer 내부에서 사용)
-# ColumnTransformer를 사용하면 숫자형 스케일링과 범주형 인코딩을 한번에 관리하기 용이
-# 여기서는 간소화를 위해 pandas get_dummies를 사용할 수도 있음
-lang_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False) # sparse_output=False for dense array
-lang_encoded_df = pd.DataFrame(lang_encoder.fit_transform(classification_df[categorical_features_cls_lang]),
-                               columns=lang_encoder.get_feature_names_out(categorical_features_cls_lang),
-                               index=classification_df.index)
-classification_df = pd.concat([classification_df, lang_encoded_df], axis=1)
-
-
-# 최종 피처 목록 (인코딩된 장르 및 언어 포함)
 final_features_cls = numerical_features_cls + list(mlb.classes_) + list(lang_encoder.get_feature_names_out(categorical_features_cls_lang))
+
 X_cls = classification_df[final_features_cls]
 y_cls = classification_df['success']
 
@@ -86,31 +82,11 @@ if len(X_train_cls) > 0 and len(X_test_cls) > 0:
     # evaluation
     print("Accuracy:", accuracy_score(y_test_cls, y_pred_cls))
     print("Classification Report:\n", classification_report(y_test_cls, y_pred_cls, zero_division=0))
-    if len(np.unique(y_test_cls)) > 1 : # ROC AUC는 두 개 이상의 클래스가 필요
+    if len(np.unique(y_test_cls)) > 1 :
          print("ROC AUC Score:", roc_auc_score(y_test_cls, y_pred_proba_cls))
 else:
     print("Not enough data for classification model training/testing after preprocessing.")
 
-# classification model test
-def test_classification_model(model, X_test, y_test):
-    print("\n--- Classification Test Results ---")
-
-    # prediction
-    y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)[:, 1] # probabilities for success class
-
-    # evaluation
-    acc = accuracy_score(y_test, y_pred)
-    roc_auc = roc_auc_score(y_test, y_proba)
-    report = classification_report(y_test, y_pred, zero_division=0)
-    cm = confusion_matrix(y_test, y_pred)
-
-    print(f"Accuracy: {acc:.4f}")
-    print(f"ROC AUC Score: {roc_auc:.4f}")
-    print("Classification Report:\n", report)
-    print("Confusion Matrix:\n", cm)
-
-    return y_pred, y_proba
 
 
 # Regression Model
@@ -145,6 +121,30 @@ if len(X_train_reg) > 0 and len(X_test_reg) > 0:
     print("R-squared:", r2_score(y_test_reg, y_pred_reg))
 else:
     print("Not enough data for regression model training/testing after preprocessing.")
+
+
+# ---- Testing ----
+
+# classification model test
+def test_classification_model(model, X_test, y_test):
+    print("\n--- Classification Test Results ---")
+
+    # prediction
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1] # probabilities for success class
+
+    # evaluation
+    acc = accuracy_score(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_proba)
+    report = classification_report(y_test, y_pred, zero_division=0)
+    cm = confusion_matrix(y_test, y_pred)
+
+    print(f"Accuracy: {acc:.4f}")
+    print(f"ROC AUC Score: {roc_auc:.4f}")
+    print("Classification Report:\n", report)
+    print("Confusion Matrix:\n", cm)
+
+    return y_pred, y_proba
 
 # regression model test
 def test_regression_model(model, X_test, y_test):
