@@ -1,3 +1,9 @@
+"""
+Data Processing and Visualization Module for Movie Dataset Analysis
+This module contains functions for data preprocessing, feature engineering, and visualization generation.
+It handles both classification and regression tasks for movie success prediction.
+"""
+
 import pandas as pd
 import numpy as np
 import ast
@@ -6,7 +12,13 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer, OneHotEncoder
 
 def load_and_preprocess_data(file_path):
-    """Load and preprocess movie metadata"""
+    """
+    Load and preprocess movie metadata
+    - Converts numeric columns to appropriate types
+    - Handles missing values
+    - Filters out invalid budget entries
+    - Processes release dates and language information
+    """
     df = pd.read_csv(file_path, low_memory=False)
     
     # Convert numeric columns
@@ -26,7 +38,12 @@ def load_and_preprocess_data(file_path):
     return df
 
 def process_genres(df):
-    """Process and encode movie genres using multi-label binarization"""
+    """
+    Process and encode movie genres using multi-label binarization
+    - Parses genre strings into lists
+    - Creates binary features for each genre
+    - Returns encoded genres and the encoder for future use
+    """
     def parse_genres(genres_str):
         try:
             genres_list = ast.literal_eval(genres_str)
@@ -41,7 +58,11 @@ def process_genres(df):
     return df, genres_encoded, mlb
 
 def process_languages(df):
-    """Encode movie languages using one-hot encoding"""
+    """
+    Encode movie languages using one-hot encoding
+    - Creates binary features for each language
+    - Handles unknown languages gracefully
+    """
     lang_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
     lang_encoded = pd.DataFrame(lang_encoder.fit_transform(df[['original_language']]),
                               columns=lang_encoder.get_feature_names_out(['original_language']),
@@ -49,11 +70,19 @@ def process_languages(df):
     return lang_encoded, lang_encoder
 
 def create_success_label(df):
-    """Create binary success label based on revenue/budget ratio threshold"""
+    """
+    Create binary success label based on revenue/budget ratio threshold
+    - A movie is considered successful if it makes at least 2x its budget
+    """
     return (df['revenue'] / df['budget'] >= 2).astype(int)
 
 def generate_data_visualizations(df, output_dir='./visualizations'):
-    """Generate exploratory data analysis visualizations"""
+    """
+    Generate exploratory data analysis visualizations
+    - Creates correlation heatmap for numerical features
+    - Shows distribution of movie success
+    - Displays top 10 language distribution
+    """
     import os
     os.makedirs(output_dir, exist_ok=True)
     
@@ -83,7 +112,11 @@ def generate_data_visualizations(df, output_dir='./visualizations'):
     plt.close()
 
 def get_feature_sets(df, genres_encoded, lang_encoded):
-    """Define feature sets for classification and regression tasks"""
+    """
+    Define feature sets for classification and regression tasks
+    - Specifies numerical features for classification
+    - Defines features for revenue prediction
+    """
     # Classification features
     numerical_features_cls = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
     final_features_cls = numerical_features_cls
@@ -94,7 +127,11 @@ def get_feature_sets(df, genres_encoded, lang_encoded):
     return final_features_cls, features_reg
 
 def generate_model_performance_plots(results, output_dir='./visualizations'):
-    """Generate comparative visualizations of model performance metrics"""
+    """
+    Generate comparative visualizations of model performance metrics
+    - Creates bar plots comparing different models
+    - Handles both classification and regression metrics
+    """
     import os
     os.makedirs(output_dir, exist_ok=True)
     
@@ -145,7 +182,11 @@ def generate_model_performance_plots(results, output_dir='./visualizations'):
         plt.close()
 
 def analyze_feature_importance(model, feature_names, output_dir='./visualizations'):
-    """Analyze and visualize feature importance for tree-based models"""
+    """
+    Analyze and visualize feature importance for tree-based models
+    - Creates bar plot of feature importances
+    - Returns top 10 most important features
+    """
     if hasattr(model, 'feature_importances_'):
         importances = model.feature_importances_
         indices = np.argsort(importances)[::-1]
@@ -162,7 +203,11 @@ def analyze_feature_importance(model, feature_names, output_dir='./visualization
     return None
 
 def generate_prediction_analysis(y_true, y_pred, output_dir='./visualizations'):
-    """Generate scatter plot of predicted vs actual values"""
+    """
+    Generate scatter plot of predicted vs actual values
+    - Shows prediction accuracy
+    - Includes perfect prediction line for reference
+    """
     plt.figure(figsize=(10, 6))
     plt.scatter(y_true, y_pred, alpha=0.5)
     plt.plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--', lw=2)
@@ -174,7 +219,11 @@ def generate_prediction_analysis(y_true, y_pred, output_dir='./visualizations'):
     plt.close()
 
 def generate_residual_plot(y_true, y_pred, output_dir='./visualizations'):
-    """Generate residual plot for regression analysis"""
+    """
+    Generate residual plot for regression analysis
+    - Shows distribution of prediction errors
+    - Helps identify potential model biases
+    """
     residuals = y_true - y_pred
     plt.figure(figsize=(10, 6))
     plt.scatter(y_pred, residuals, alpha=0.5)

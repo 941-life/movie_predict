@@ -1,3 +1,9 @@
+"""
+Model Training and Evaluation Module
+This module implements a ModelTrainer class for training and evaluating both classification and regression models
+for movie success prediction. It includes cross-validation, hyperparameter tuning, and performance metrics calculation.
+"""
+
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, KFold, GridSearchCV
 from sklearn.preprocessing import StandardScaler
@@ -8,17 +14,41 @@ from sklearn.metrics import (accuracy_score, roc_auc_score, f1_score,
 import pandas as pd
 
 class ModelTrainer:
-    def __init__(self, n_splits=5):
+    """
+    A class for training and evaluating machine learning models
+    Handles both classification and regression tasks with cross-validation
+    """
+    def __init__(self, n_splits=10):
+        """
+        Initialize the ModelTrainer with number of cross-validation splits
+        Args:
+            n_splits (int): Number of folds for cross-validation
+        """
         self.n_splits = n_splits
         self.scaler = StandardScaler()
         
     def prepare_data(self, X, y):
-        """Prepare data with scaling"""
+        """
+        Prepare data by scaling features
+        Args:
+            X: Feature matrix
+            y: Target variable
+        Returns:
+            Scaled feature matrix and target variable
+        """
         X_scaled = self.scaler.fit_transform(X)
         return X_scaled, y
     
     def train_classification_models(self, X, y):
-        """Train key classification models using StratifiedKFold cross-validation"""
+        """
+        Train and evaluate classification models using stratified k-fold cross-validation
+        Implements Random Forest, Logistic Regression, and Gradient Boosting
+        Args:
+            X: Feature matrix
+            y: Binary target variable
+        Returns:
+            Dictionary containing model performance metrics and trained models
+        """
         models = {
             'RandomForest': RandomForestClassifier(random_state=42),
             'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000),
@@ -68,7 +98,15 @@ class ModelTrainer:
         return results
     
     def train_regression_models(self, X, y):
-        """Train key regression models with cross-validation"""
+        """
+        Train and evaluate regression models using k-fold cross-validation
+        Implements Random Forest and Gradient Boosting for revenue prediction
+        Args:
+            X: Feature matrix
+            y: Continuous target variable (revenue)
+        Returns:
+            Dictionary containing model performance metrics and trained models
+        """
         models = {
             'RandomForest': RandomForestRegressor(random_state=42),
             'GradientBoosting': GradientBoostingRegressor(random_state=42)
@@ -116,7 +154,16 @@ class ModelTrainer:
         return results
     
     def tune_random_forest(self, X, y, task='classification'):
-        """Simple hyperparameter tuning for RandomForest"""
+        """
+        Perform hyperparameter tuning for Random Forest models
+        Uses GridSearchCV to find optimal parameters
+        Args:
+            X: Feature matrix
+            y: Target variable
+            task: Either 'classification' or 'regression'
+        Returns:
+            Best parameters and corresponding score
+        """
         if task == 'classification':
             model = RandomForestClassifier(random_state=42)
             param_grid = {
